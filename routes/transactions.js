@@ -78,20 +78,6 @@ router.post('/', auth, async (req, res) => {
       }
     }
 
-    // 24-hour cooldown check
-    const [[lastTx]] = await pool.query(
-      `SELECT End_Date_and_Time FROM RENTAL_TRANSACTION
-       WHERE Customer_Account_ID = ? AND Rental_Status = 'Completed'
-       ORDER BY End_Date_and_Time DESC LIMIT 1`,
-      [req.user.account_id]
-    );
-    if (lastTx) {
-      const hoursSince = (Date.now() - new Date(lastTx.End_Date_and_Time)) / 3600000;
-      if (hoursSince < 24) {
-        return res.status(429).json({ success: false, message: 'You must wait 24 hours after your last rental before booking again.' });
-      }
-    }
-
     const rentalDuration = Math.max(1, Math.ceil(
       (new Date(end_date_and_time) - new Date(start_date_and_time)) / 86400000
     ));
