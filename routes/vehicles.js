@@ -8,9 +8,10 @@ const router = express.Router();
 // List all available vehicles 
 router.get('/', async (req, res) => {
   try {
-    let sql = `SELECT v.*, p.Name AS Owner_Name, p.Contact_Number AS Owner_Contact
-               FROM VEHICLE v JOIN PERSON p ON v.Owner_Account_ID = p.Account_ID
-               WHERE v.Vehicle_Status = 'Available'`;
+    let sql = `SELECT v.*, p.Username AS Owner_Username, p.Contact_Number AS Owner_Contact
+               FROM VEHICLE v
+               JOIN PERSON p ON v.Owner_Account_ID = p.Account_ID
+               WHERE v.Vehicle_Status = 'Available'`
     const params = [];
     if (req.query.type) { sql += ` AND v.Vehicle_Type = ?`; params.push(req.query.type); }
 
@@ -39,8 +40,9 @@ router.get('/my', auth, async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const [[vehicle]] = await pool.query(
-      `SELECT v.*, p.Name AS Owner_Name, p.Contact_Number AS Owner_Contact
-       FROM VEHICLE v JOIN PERSON p ON v.Owner_Account_ID = p.Account_ID
+      `SELECT v.*, p.Username AS Owner_Username, p.Contact_Number AS Owner_Contact
+       FROM VEHICLE v
+       JOIN PERSON p ON v.Owner_Account_ID = p.Account_ID
        WHERE v.Vehicle_ID = ?`,
       [req.params.id]
     );
@@ -55,27 +57,21 @@ router.get('/:id', async (req, res) => {
 // Vehicle listing 
 router.post('/', auth, async (req, res) => {
   try {
-    const [[person]] = await pool.query(
-      `SELECT Drivers_License FROM PERSON WHERE Account_ID = ?`, [req.user.account_id]
-    );
-    if (!person?.Drivers_License) {
-      return res.status(403).json({ success: false, message: 'You need a verified driver\'s license to list a vehicle.' });
-    }
+    const { vehicle_type, vehicle_model, vehicle_color, seat_capacity, plate_number, with_driver } = req.body;
 
-    const { vehicle_type, vehicle_model, vehicle_color, seat_capacity,
-            daily_rate, plate_number, registration_date, fuel_type } = req.body;
-
-    if (!vehicle_type || !vehicle_model || !plate_number || !registration_date || !daily_rate) {
+    if (!vehicle_type || !vehicle_model || !vehicle_color || !seat_capacity || !plate_number) {
       return res.status(400).json({ success: false, message: 'Please fill in all required vehicle fields.' });
     }
 
     const vehicleID = await genID('VEHICLE');
     await pool.query(
-      `INSERT INTO VEHICLE (Vehicle_ID, Vehicle_Type, Vehicle_Model, Vehicle_Color, Seat_Capacity,
-        Daily_Rate, Plate_Number, Registration_Date, Vehicle_Status, Fuel_Type, Owner_Account_ID)
-       VALUES (?,?,?,?,?,?,?,?,'Available',?,?)`,
+      `INSERT INTO VEHICLE
+       (Vehicle_ID, Vehicle_Type, Vehicle_Model, Vehicle_Color, Seat_Capacity,
+        Plate_Number, Vehicle_Status, With_Driver, Owner_Account_ID)
+       VALUES (?, ?, ?, ?, ?, ?, 'Available', ?, ?)`
+      
       [vehicleID, vehicle_type, vehicle_model, vehicle_color, seat_capacity,
-       daily_rate, plate_number, registration_date, fuel_type || null, req.user.account_id]
+       plate_number, with_driver ? 1 : 0, req.user.account_id]
     );
 
     res.status(201).json({ success: true, message: 'Vehicle listed!', data: { vehicle_id: vehicleID } });
