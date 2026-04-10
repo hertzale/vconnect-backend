@@ -9,16 +9,16 @@ const router = express.Router();
 
 // Create a new account
 router.post('/register', async (req, res) => {
-  const { name, address, email, contact_number, password, drivers_license } = req.body;
+  const { username, email, password } = req.body;
 
-  if (!name || !address || !email || !contact_number || !password) {
+  if (!username || !email || !password) {
     return res.status(400).json({ success: false, message: 'Please fill in all required fields.' });
   }
 
   try {
     const [[exists]] = await pool.query(
-      `SELECT Account_ID FROM PERSON WHERE Email = ? OR Contact_Number = ?`,
-      [email, contact_number]
+      `SELECT Account_ID FROM PERSON WHERE Email = ? OR Username = ?`,
+      [email, username]
     );
     if (exists) {
       return res.status(409).json({ success: false, message: 'Email or contact number already used.' });
@@ -28,14 +28,13 @@ router.post('/register', async (req, res) => {
     const accountID = await genID('PERSON');
 
     await pool.query(
-      `INSERT INTO PERSON (Account_ID, Name, Address, Email, Contact_Number, Drivers_License, Password)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [accountID, name, address, email, contact_number, drivers_license || null, hashed]
+      `INSERT INTO PERSON (Account_ID, Username, Email, Password) VALUES (?, ?, ?, ?)`,
+    [accountID, username, email, hashed]
     );
 
     const token = jwt.sign({ account_id: accountID, email }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
 
-    res.status(201).json({ success: true, message: 'Account created!', data: { account_id: accountID, name, email, token } });
+    res.status(201).json({ success: true, message: 'Account created!', data: { account_id: accountID, username, email, token } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error during registration.' });
@@ -52,7 +51,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const [[user]] = await pool.query(
-      `SELECT Account_ID, Name, Email, Password, Drivers_License FROM PERSON WHERE Email = ?`,
+      `SELECT Account_ID, Username, Email, Password, Drivers_License FROM PERSON WHERE Email = ?`,
       [email]
     );
 
@@ -67,7 +66,7 @@ router.post('/login', async (req, res) => {
       message: 'Logged in successfully.',
       data: {
         account_id:  user.Account_ID,
-        name:        user.Name,
+        username:        user.Username,
         email:       user.Email,
         has_license: !!user.Drivers_License,
         token
